@@ -1,0 +1,962 @@
+-- ============================================================
+--                    223HUB  v5.0
+--   Preto & Vermelho | Universal-style | Full Featured
+-- ============================================================
+ 
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui          = game:GetService("CoreGui")
+local TweenService     = game:GetService("TweenService")
+local HttpService      = game:GetService("HttpService")
+ 
+local LocalPlayer = Players.LocalPlayer
+local Mouse       = LocalPlayer:GetMouse()
+local Camera      = workspace.CurrentCamera
+ 
+-- ============================================================
+-- CONFIG
+-- ============================================================
+ 
+local Cfg = {
+    ESP = {
+        Enabled=false, BoxESP=false, FillBox=false, NameESP=false,
+        HealthBar=false, Tracers=false, Distance=false, WallCheck=false,
+        MaxDistance=500,
+        TrackList={},
+        BoxColor=Color3.fromRGB(200,40,40), FillColor=Color3.fromRGB(200,40,40),
+        NameColor=Color3.fromRGB(255,255,255), TracerColor=Color3.fromRGB(200,40,40),
+        DistanceColor=Color3.fromRGB(200,200,200),
+        HealthBarColor=Color3.fromRGB(0,220,80), HealthBarBgColor=Color3.fromRGB(50,0,0),
+    },
+    Aim = {
+        Aimbot=false, SilentAim=false, WallCheck=false,
+        Prediction=false, PredStrength=1,
+        FOV=90, ShowFOV=false, UseFOV=false,
+        AimPart="Head", LockMode="First Person",
+        Smoothness=20,
+        AimKey=Enum.KeyCode.E, AimKeyName="E",
+        Blacklist={},
+    },
+    TriggerBot = { Enabled=false, TeamCheck=false, Delay=0 },
+    Misc = {
+        Fly=false, FlySpeed=50, Noclip=false,
+        Speed=false, WalkSpeed=16,
+        AntiAFK=false,
+        HitboxExtender=false, HitboxSize=8,
+        JumpModifier=false, JumpPower=50,
+        DupeToolName="",
+    },
+    Settings = {
+        ToggleKey=Enum.KeyCode.Semicolon, ToggleKeyName=";",
+        ESPKey=Enum.KeyCode.F2,           ESPKeyName="F2",
+        AimbotToggleKey=Enum.KeyCode.F3,  AimbotToggleKeyName="F3",
+        SilentKey=Enum.KeyCode.F4,        SilentKeyName="F4",
+        FlyKey=Enum.KeyCode.F5,           FlyKeyName="F5",
+        NoclipKey=Enum.KeyCode.F6,        NoclipKeyName="F6",
+        SpeedKey=Enum.KeyCode.F7,         SpeedKeyName="F7",
+    },
+}
+ 
+-- ============================================================
+-- SAVE / LOAD
+-- ============================================================
+ 
+local SAVE_FILE = "223HUB_config.json"
+ 
+local function SerializeCfg()
+    local t = {
+        ESP={Enabled=Cfg.ESP.Enabled,BoxESP=Cfg.ESP.BoxESP,FillBox=Cfg.ESP.FillBox,
+             NameESP=Cfg.ESP.NameESP,HealthBar=Cfg.ESP.HealthBar,Tracers=Cfg.ESP.Tracers,
+             Distance=Cfg.ESP.Distance,WallCheck=Cfg.ESP.WallCheck,MaxDistance=Cfg.ESP.MaxDistance,
+             TrackList=Cfg.ESP.TrackList},
+        Aim={Aimbot=Cfg.Aim.Aimbot,SilentAim=Cfg.Aim.SilentAim,WallCheck=Cfg.Aim.WallCheck,
+             Prediction=Cfg.Aim.Prediction,PredStrength=Cfg.Aim.PredStrength,
+             FOV=Cfg.Aim.FOV,ShowFOV=Cfg.Aim.ShowFOV,UseFOV=Cfg.Aim.UseFOV,
+             AimPart=Cfg.Aim.AimPart,LockMode=Cfg.Aim.LockMode,
+             Smoothness=Cfg.Aim.Smoothness,AimKeyName=Cfg.Aim.AimKeyName,
+             Blacklist=Cfg.Aim.Blacklist},
+        TriggerBot={Enabled=Cfg.TriggerBot.Enabled,TeamCheck=Cfg.TriggerBot.TeamCheck,Delay=Cfg.TriggerBot.Delay},
+        Misc={FlySpeed=Cfg.Misc.FlySpeed,WalkSpeed=Cfg.Misc.WalkSpeed,
+              AntiAFK=Cfg.Misc.AntiAFK,HitboxSize=Cfg.Misc.HitboxSize,JumpPower=Cfg.Misc.JumpPower},
+        Settings={ToggleKeyName=Cfg.Settings.ToggleKeyName,ESPKeyName=Cfg.Settings.ESPKeyName,
+                  AimbotToggleKeyName=Cfg.Settings.AimbotToggleKeyName,SilentKeyName=Cfg.Settings.SilentKeyName,
+                  FlyKeyName=Cfg.Settings.FlyKeyName,NoclipKeyName=Cfg.Settings.NoclipKeyName,
+                  SpeedKeyName=Cfg.Settings.SpeedKeyName},
+    }
+    return HttpService:JSONEncode(t)
+end
+ 
+local function ApplySavedCfg(t)
+    if not t then return end
+    local function merge(dst,src)
+        if not src then return end
+        for k,v in pairs(src) do
+            if type(v)=="table" then if type(dst[k])=="table" then merge(dst[k],v) end
+            elseif dst[k]~=nil then dst[k]=v end
+        end
+    end
+    merge(Cfg.ESP,t.ESP); merge(Cfg.Aim,t.Aim)
+    merge(Cfg.TriggerBot,t.TriggerBot); merge(Cfg.Misc,t.Misc); merge(Cfg.Settings,t.Settings)
+    local function TryKey(n) return Enum.KeyCode[n] or Enum.KeyCode.Unknown end
+    Cfg.Aim.AimKey=TryKey(Cfg.Aim.AimKeyName)
+    Cfg.Settings.ToggleKey=TryKey(Cfg.Settings.ToggleKeyName)
+    Cfg.Settings.ESPKey=TryKey(Cfg.Settings.ESPKeyName)
+    Cfg.Settings.AimbotToggleKey=TryKey(Cfg.Settings.AimbotToggleKeyName)
+    Cfg.Settings.SilentKey=TryKey(Cfg.Settings.SilentKeyName)
+    Cfg.Settings.FlyKey=TryKey(Cfg.Settings.FlyKeyName)
+    Cfg.Settings.NoclipKey=TryKey(Cfg.Settings.NoclipKeyName)
+    Cfg.Settings.SpeedKey=TryKey(Cfg.Settings.SpeedKeyName)
+end
+ 
+local function SaveConfig()
+    if writefile then pcall(function() writefile(SAVE_FILE,SerializeCfg()) end); return true end
+    return false
+end
+ 
+local function LoadConfig()
+    if readfile and isfile and isfile(SAVE_FILE) then
+        local ok,data=pcall(function() return readfile(SAVE_FILE) end)
+        if ok and data then
+            local ok2,t=pcall(function() return HttpService:JSONDecode(data) end)
+            if ok2 then ApplySavedCfg(t); return true end
+        end
+    end
+    return false
+end
+ 
+-- ============================================================
+-- UTILITÁRIOS
+-- ============================================================
+ 
+local function W2S(pos)
+    local sp,vis=Camera:WorldToViewportPoint(pos)
+    return Vector2.new(sp.X,sp.Y),vis
+end
+ 
+local function GetBounds(char)
+    local hrp=char:FindFirstChild("HumanoidRootPart"); if not hrp then return nil end
+    local ts,v1=W2S(hrp.Position+Vector3.new(0,3.3,0))
+    local bs,v2=W2S(hrp.Position-Vector3.new(0,2.8,0))
+    if not v1 and not v2 then return nil end
+    local h=math.abs(bs.Y-ts.Y); local w=h*0.55
+    return ts.X-w/2,ts.Y,w,h
+end
+ 
+local function GetDist(char)
+    local a=char:FindFirstChild("HumanoidRootPart")
+    local b=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not a or not b then return nil end
+    return math.floor((a.Position-b.Position).Magnitude)
+end
+ 
+local function GetHP(char)
+    local h=char:FindFirstChildOfClass("Humanoid")
+    return h and h.Health or 0, h and h.MaxHealth or 100
+end
+ 
+local function IsVisible(char)
+    local hrp=char:FindFirstChild("HumanoidRootPart")
+    local mine=LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp or not mine then return false end
+    local rp=RaycastParams.new(); rp.FilterType=Enum.RaycastFilterType.Exclude
+    local ex={}
+    local function ap(c) for _,v in ipairs(c:GetDescendants()) do if v:IsA("BasePart") then ex[#ex+1]=v end end end
+    if LocalPlayer.Character then ap(LocalPlayer.Character) end; ap(char)
+    rp.FilterDescendantsInstances=ex
+    return workspace:Raycast(mine.Position,hrp.Position-mine.Position,rp)==nil
+end
+ 
+local function ESPShouldShow(player)
+    if next(Cfg.ESP.TrackList)==nil then return true end
+    return Cfg.ESP.TrackList[player.Name]==true
+end
+ 
+local function AimIsBlacklisted(player)
+    return Cfg.Aim.Blacklist[player.Name]==true
+end
+ 
+local function ClosestInFOV()
+    local vc=Camera.ViewportSize; local sc=Vector2.new(vc.X/2,vc.Y/2)
+    local best,bestD=nil,math.huge
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p==LocalPlayer then continue end
+        if AimIsBlacklisted(p) then continue end
+        local c=p.Character; if not c then continue end
+        local part=c:FindFirstChild(Cfg.Aim.AimPart) or c:FindFirstChild("HumanoidRootPart")
+        if not part then continue end
+        local hum=c:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health<=0 then continue end
+        if Cfg.Aim.WallCheck and not IsVisible(c) then continue end
+        local sp,on=W2S(part.Position); if not on then continue end
+        local d=(sp-sc).Magnitude
+        if d<Cfg.Aim.FOV and d<bestD then bestD=d; best=p end
+    end
+    return best
+end
+ 
+-- ============================================================
+-- ESP OBJECTS
+-- ============================================================
+ 
+local ESPO={}
+local function MakeESP(p)
+    if p==LocalPlayer then return end
+    local d={}
+    local function sq(filled,color,alpha)
+        local s=Drawing.new("Square"); s.Filled=filled; s.Color=color or Color3.new(1,1,1)
+        s.Transparency=alpha or 1; s.Thickness=1.5; s.Visible=false; return s
+    end
+    local function tx(sz,col)
+        local t=Drawing.new("Text"); t.Size=sz; t.Color=col or Color3.new(1,1,1)
+        t.Outline=true; t.OutlineColor=Color3.new(0,0,0); t.Center=true; t.Visible=false; return t
+    end
+    d.Box=sq(false,Cfg.ESP.BoxColor); d.Fill=sq(true,Cfg.ESP.FillColor,0.35)
+    d.Name=tx(13,Cfg.ESP.NameColor); d.Dist=tx(11,Cfg.ESP.DistanceColor)
+    d.HPBg=sq(true,Cfg.ESP.HealthBarBgColor); d.HPFill=sq(true,Cfg.ESP.HealthBarColor)
+    d.Tracer=Drawing.new("Line"); d.Tracer.Thickness=1; d.Tracer.Color=Cfg.ESP.TracerColor; d.Tracer.Visible=false
+    ESPO[p]=d
+end
+local function KillESP(p) if ESPO[p] then for _,v in pairs(ESPO[p]) do v:Remove() end; ESPO[p]=nil end end
+local function HideAll(d) for _,v in pairs(d) do v.Visible=false end end
+ 
+-- ============================================================
+-- FOV CIRCLE
+-- ============================================================
+ 
+local FOVC=Drawing.new("Circle")
+FOVC.Thickness=1; FOVC.Color=Color3.fromRGB(200,40,40); FOVC.Filled=false; FOVC.NumSides=64; FOVC.Visible=false; FOVC.Transparency=0.8
+ 
+-- ============================================================
+-- SILENT AIM
+-- ============================================================
+ 
+local SAHooked=false
+local function HookSilentAim()
+    if SAHooked then return end; SAHooked=true
+    local mt=getrawmetatable and getrawmetatable(Mouse); if not mt then return end
+    local old=mt.__index
+    setreadonly(mt,false)
+    mt.__index=function(self,k)
+        if Cfg.Aim.SilentAim then
+            local t=ClosestInFOV()
+            if t and t.Character then
+                local pt=t.Character:FindFirstChild(Cfg.Aim.AimPart) or t.Character:FindFirstChild("HumanoidRootPart")
+                if pt then
+                    if k=="Hit" then return CFrame.new(pt.Position) end
+                    if k=="Target" then return pt end
+                end
+            end
+        end
+        return old(self,k)
+    end
+    setreadonly(mt,true)
+end
+ 
+-- ============================================================
+-- TRIGGERBOT
+-- ============================================================
+ 
+local TBLast=0
+RunService.Heartbeat:Connect(function()
+    if not Cfg.TriggerBot.Enabled then return end
+    if tick()-TBLast<Cfg.TriggerBot.Delay/1000 then return end
+    local target=Mouse.Target; if not target then return end
+    local char=target:FindFirstAncestorOfClass("Model"); if not char then return end
+    local player=Players:GetPlayerFromCharacter(char)
+    if not player or player==LocalPlayer then return end
+    if AimIsBlacklisted(player) then return end
+    local hum=char:FindFirstChildOfClass("Humanoid"); if not hum or hum.Health<=0 then return end
+    TBLast=tick()
+    local vms=game:GetService("VirtualInputManager")
+    if vms then vms:SendMouseButtonEvent(0,0,0,true,game,0); task.wait(0.05); vms:SendMouseButtonEvent(0,0,0,false,game,0) end
+end)
+ 
+-- ============================================================
+-- MISC: FLY
+-- ============================================================
+ 
+local FlyConn,BodyVel,BodyGyr=nil,nil,nil
+local function EnableFly()
+    local char=LocalPlayer.Character; if not char then return end
+    local hrp=char:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+    local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    hum.PlatformStand=true
+    BodyVel=Instance.new("BodyVelocity"); BodyVel.Velocity=Vector3.zero; BodyVel.MaxForce=Vector3.new(1e5,1e5,1e5); BodyVel.Parent=hrp
+    BodyGyr=Instance.new("BodyGyro"); BodyGyr.MaxTorque=Vector3.new(1e5,1e5,1e5); BodyGyr.P=1e4; BodyGyr.Parent=hrp
+    FlyConn=RunService.RenderStepped:Connect(function()
+        if not Cfg.Misc.Fly then return end
+        local cf=Camera.CFrame; local vel=Vector3.zero; local spd=Cfg.Misc.FlySpeed
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then vel=vel+cf.LookVector*spd end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then vel=vel-cf.LookVector*spd end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then vel=vel-cf.RightVector*spd end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then vel=vel+cf.RightVector*spd end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then vel=vel+Vector3.new(0,spd,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then vel=vel-Vector3.new(0,spd,0) end
+        BodyVel.Velocity=vel; BodyGyr.CFrame=cf
+    end)
+end
+local function DisableFly()
+    if FlyConn then FlyConn:Disconnect(); FlyConn=nil end
+    if BodyVel then BodyVel:Destroy(); BodyVel=nil end
+    if BodyGyr then BodyGyr:Destroy(); BodyGyr=nil end
+    local char=LocalPlayer.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid"); if hum then hum.PlatformStand=false end
+end
+ 
+-- ============================================================
+-- MISC: NOCLIP / SPEED / JUMP
+-- ============================================================
+ 
+local NoclipConn=nil
+local function EnableNoclip()
+    NoclipConn=RunService.Stepped:Connect(function()
+        if not Cfg.Misc.Noclip then return end
+        local char=LocalPlayer.Character; if not char then return end
+        for _,p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end
+    end)
+end
+local function DisableNoclip()
+    if NoclipConn then NoclipConn:Disconnect(); NoclipConn=nil end
+    local char=LocalPlayer.Character; if not char then return end
+    for _,p in ipairs(char:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=true end end
+end
+local function ApplySpeed()
+    local char=LocalPlayer.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    hum.WalkSpeed=Cfg.Misc.Speed and Cfg.Misc.WalkSpeed or 16
+end
+local function ApplyJump()
+    local char=LocalPlayer.Character; if not char then return end
+    local hum=char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    hum.JumpPower=Cfg.Misc.JumpModifier and Cfg.Misc.JumpPower or 50
+end
+ 
+-- ============================================================
+-- MISC: ANTI-AFK / HITBOX / TOOL DUPE
+-- ============================================================
+ 
+local function EnableAntiAFK()
+    local VIM=game:GetService("VirtualInputManager")
+    LocalPlayer.Idled:Connect(function()
+        if Cfg.Misc.AntiAFK then
+            VIM:SendKeyEvent(true,Enum.KeyCode.ButtonL3,false,game); task.wait(0.5)
+            VIM:SendKeyEvent(false,Enum.KeyCode.ButtonL3,false,game)
+        end
+    end)
+end
+ 
+local HitboxConns={}
+local function ApplyHitbox(p)
+    if p==LocalPlayer then return end
+    local function onChar(char)
+        for _,v in ipairs(char:GetDescendants()) do
+            if v:IsA("BasePart") and Cfg.Misc.HitboxExtender then
+                v.Size=Vector3.new(Cfg.Misc.HitboxSize,Cfg.Misc.HitboxSize,Cfg.Misc.HitboxSize); v.Transparency=0.8
+            end
+        end
+    end
+    if p.Character then onChar(p.Character) end
+    HitboxConns[p]=p.CharacterAdded:Connect(onChar)
+end
+local function RemoveHitbox(p)
+    if HitboxConns[p] then HitboxConns[p]:Disconnect(); HitboxConns[p]=nil end
+    local char=p.Character; if not char then return end
+    for _,v in ipairs(char:GetDescendants()) do if v:IsA("BasePart") then v.Size=Vector3.new(2,2,1); v.Transparency=0 end end
+end
+local function RefreshHitboxes()
+    for _,p in ipairs(Players:GetPlayers()) do
+        if p~=LocalPlayer then if Cfg.Misc.HitboxExtender then ApplyHitbox(p) else RemoveHitbox(p) end end
+    end
+end
+ 
+local function DuplicateTool()
+    local name=Cfg.Misc.DupeToolName:lower():gsub("%s+",""); if name=="" then return end
+    local bp=LocalPlayer:FindFirstChild("Backpack"); local char=LocalPlayer.Character; local tool=nil
+    if bp then for _,v in ipairs(bp:GetChildren()) do if v:IsA("Tool") and v.Name:lower():find(name,1,true) then tool=v; break end end end
+    if not tool and char then for _,v in ipairs(char:GetChildren()) do if v:IsA("Tool") and v.Name:lower():find(name,1,true) then tool=v; break end end end
+    if tool and bp then tool:Clone().Parent=bp end
+end
+ 
+-- ============================================================
+-- MAIN LOOP
+-- ============================================================
+ 
+RunService.RenderStepped:Connect(function()
+    local vs=Camera.ViewportSize
+    FOVC.Position=Vector2.new(vs.X/2,vs.Y/2); FOVC.Radius=Cfg.Aim.FOV
+    FOVC.Visible=Cfg.Aim.ShowFOV and (Cfg.Aim.UseFOV or Cfg.Aim.Aimbot or Cfg.Aim.SilentAim)
+ 
+    if Cfg.Aim.Aimbot and UserInputService:IsKeyDown(Cfg.Aim.AimKey) then
+        local t=ClosestInFOV()
+        if t and t.Character then
+            local pt=t.Character:FindFirstChild(Cfg.Aim.AimPart) or t.Character:FindFirstChild("HumanoidRootPart")
+            if pt then
+                local pos=pt.Position
+                if Cfg.Aim.Prediction then
+                    local hrp=t.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then pos=pos+hrp.AssemblyLinearVelocity*(Cfg.Aim.PredStrength*0.05) end
+                end
+                Camera.CFrame=Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position,pos),math.clamp(Cfg.Aim.Smoothness/100*0.3,0.01,1))
+            end
+        end
+    end
+ 
+    if not Cfg.ESP.Enabled then for _,d in pairs(ESPO) do HideAll(d) end; return end
+    for player,d in pairs(ESPO) do
+        if not player or not player.Parent then KillESP(player); continue end
+        if not ESPShouldShow(player) then HideAll(d); continue end
+        local c=player.Character; if not c then HideAll(d); continue end
+        local hrp=c:FindFirstChild("HumanoidRootPart"); if not hrp then HideAll(d); continue end
+        local dist=GetDist(c); if not dist or dist>Cfg.ESP.MaxDistance then HideAll(d); continue end
+        if Cfg.ESP.WallCheck and not IsVisible(c) then HideAll(d); continue end
+        local x,y,w,h=GetBounds(c); if not x then HideAll(d); continue end
+        if Cfg.ESP.BoxESP   then d.Box.Position=Vector2.new(x,y);d.Box.Size=Vector2.new(w,h);d.Box.Visible=true else d.Box.Visible=false end
+        if Cfg.ESP.FillBox  then d.Fill.Position=Vector2.new(x,y);d.Fill.Size=Vector2.new(w,h);d.Fill.Visible=true else d.Fill.Visible=false end
+        if Cfg.ESP.NameESP  then d.Name.Position=Vector2.new(x+w/2,y-14);d.Name.Text=player.DisplayName;d.Name.Visible=true else d.Name.Visible=false end
+        if Cfg.ESP.Distance then d.Dist.Position=Vector2.new(x+w/2,y+h+2);d.Dist.Text=dist.."m";d.Dist.Visible=true else d.Dist.Visible=false end
+        if Cfg.ESP.HealthBar then
+            local hp,mhp=GetHP(c); local r=math.clamp(hp/mhp,0,1)
+            d.HPBg.Position=Vector2.new(x-6,y);d.HPBg.Size=Vector2.new(4,h);d.HPBg.Visible=true
+            d.HPFill.Color=Color3.new(math.clamp(2*(1-r),0,1),math.clamp(2*r,0,1),0.05)
+            d.HPFill.Position=Vector2.new(x-6,y+h-h*r);d.HPFill.Size=Vector2.new(4,h*r);d.HPFill.Visible=true
+        else d.HPBg.Visible=false;d.HPFill.Visible=false end
+        if Cfg.ESP.Tracers then
+            d.Tracer.From=Vector2.new(vs.X/2,vs.Y);d.Tracer.To=Vector2.new(x+w/2,y+h);d.Tracer.Visible=true
+        else d.Tracer.Visible=false end
+    end
+end)
+ 
+for _,p in ipairs(Players:GetPlayers()) do MakeESP(p) end
+Players.PlayerAdded:Connect(MakeESP)
+Players.PlayerRemoving:Connect(KillESP)
+Players.PlayerAdded:Connect(function(p) if Cfg.Misc.HitboxExtender then ApplyHitbox(p) end end)
+Players.PlayerRemoving:Connect(function(p) HitboxConns[p]=nil end)
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5); ApplySpeed(); ApplyJump()
+    if Cfg.Misc.Fly then EnableFly() end
+    if Cfg.Misc.Noclip then EnableNoclip() end
+end)
+EnableAntiAFK()
+ 
+-- ============================================================
+-- KEYBIND HANDLER (global)
+-- ============================================================
+ 
+local GuiVisible=true
+local RefreshCBs={}
+local function TR(n) if RefreshCBs[n] then RefreshCBs[n]() end end
+ 
+UserInputService.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if input.UserInputType~=Enum.UserInputType.Keyboard then return end
+    local kc=input.KeyCode
+    if kc==Cfg.Settings.ToggleKey then
+        GuiVisible=not GuiVisible
+        if _G._223HUB_Win then _G._223HUB_Win.Visible=GuiVisible end
+    elseif kc==Cfg.Settings.ESPKey then Cfg.ESP.Enabled=not Cfg.ESP.Enabled; TR("ESPEnabled")
+    elseif kc==Cfg.Settings.AimbotToggleKey then Cfg.Aim.Aimbot=not Cfg.Aim.Aimbot; TR("Aimbot")
+    elseif kc==Cfg.Settings.SilentKey then Cfg.Aim.SilentAim=not Cfg.Aim.SilentAim; if Cfg.Aim.SilentAim then HookSilentAim() end; TR("SilentAim")
+    elseif kc==Cfg.Settings.FlyKey then Cfg.Misc.Fly=not Cfg.Misc.Fly; if Cfg.Misc.Fly then EnableFly() else DisableFly() end; TR("Fly")
+    elseif kc==Cfg.Settings.NoclipKey then Cfg.Misc.Noclip=not Cfg.Misc.Noclip; if Cfg.Misc.Noclip then EnableNoclip() else DisableNoclip() end; TR("Noclip")
+    elseif kc==Cfg.Settings.SpeedKey then Cfg.Misc.Speed=not Cfg.Misc.Speed; ApplySpeed(); TR("Speed")
+    end
+end)
+ 
+-- ============================================================
+-- GUI
+-- ============================================================
+ 
+if CoreGui:FindFirstChild("223HUB") then CoreGui:FindFirstChild("223HUB"):Destroy() end
+local SG=Instance.new("ScreenGui"); SG.Name="223HUB"; SG.ResetOnSpawn=false; SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; SG.Parent=CoreGui
+ 
+local C={
+    bg0=Color3.fromRGB(8,8,8),bg1=Color3.fromRGB(13,13,13),bg2=Color3.fromRGB(18,18,18),bg3=Color3.fromRGB(26,26,26),
+    red=Color3.fromRGB(175,22,22),redH=Color3.fromRGB(210,40,40),pink=Color3.fromRGB(200,55,65),
+    text=Color3.fromRGB(205,205,205),dim=Color3.fromRGB(100,100,100),wht=Color3.fromRGB(255,255,255),
+    sep=Color3.fromRGB(30,30,30),green=Color3.fromRGB(60,180,80),orange=Color3.fromRGB(220,130,40),
+}
+local F=Enum.Font.Code; local FB=Enum.Font.GothamBold
+ 
+-- ============================================================
+-- LOADING SCREEN
+-- ============================================================
+ 
+local LoadF=Instance.new("Frame",SG)
+LoadF.Size=UDim2.new(1,0,1,0); LoadF.BackgroundColor3=C.bg0; LoadF.BorderSizePixel=0; LoadF.ZIndex=100
+ 
+local topLine=Instance.new("Frame",LoadF); topLine.Size=UDim2.new(1,0,0,2); topLine.BackgroundColor3=C.red; topLine.BorderSizePixel=0
+local botLine=Instance.new("Frame",LoadF); botLine.Size=UDim2.new(1,0,0,2); botLine.Position=UDim2.new(0,0,1,-2); botLine.BackgroundColor3=C.red; botLine.BorderSizePixel=0
+ 
+local logoCont=Instance.new("Frame",LoadF)
+logoCont.Size=UDim2.new(0,420,0,190); logoCont.Position=UDim2.new(0.5,-210,0.5,-150); logoCont.BackgroundTransparency=1
+ 
+local bigIc=Instance.new("TextLabel",logoCont); bigIc.Text="◈"; bigIc.Size=UDim2.new(1,0,0,60); bigIc.BackgroundTransparency=1; bigIc.TextColor3=C.red; bigIc.Font=FB; bigIc.TextSize=52; bigIc.TextXAlignment=Enum.TextXAlignment.Center
+local loadTitle=Instance.new("TextLabel",logoCont); loadTitle.Text="223HUB"; loadTitle.Size=UDim2.new(1,0,0,48); loadTitle.Position=UDim2.new(0,0,0,58); loadTitle.BackgroundTransparency=1; loadTitle.TextColor3=C.wht; loadTitle.Font=FB; loadTitle.TextSize=44; loadTitle.TextXAlignment=Enum.TextXAlignment.Center
+local loadSub=Instance.new("TextLabel",logoCont); loadSub.Text="HUB BY 𒐬 GROUP"; loadSub.Size=UDim2.new(1,0,0,24); loadSub.Position=UDim2.new(0,0,0,108); loadSub.BackgroundTransparency=1; loadSub.TextColor3=C.dim; loadSub.Font=F; loadSub.TextSize=16; loadSub.TextXAlignment=Enum.TextXAlignment.Center
+local loadVer=Instance.new("TextLabel",logoCont); loadVer.Text="v5.0  —  Public Beta"; loadVer.Size=UDim2.new(1,0,0,16); loadVer.Position=UDim2.new(0,0,0,134); loadVer.BackgroundTransparency=1; loadVer.TextColor3=C.red; loadVer.Font=F; loadVer.TextSize=12; loadVer.TextXAlignment=Enum.TextXAlignment.Center
+ 
+local barCont=Instance.new("Frame",LoadF); barCont.Size=UDim2.new(0,360,0,6); barCont.Position=UDim2.new(0.5,-180,0.5,72); barCont.BackgroundColor3=C.bg3; barCont.BorderSizePixel=0
+Instance.new("UICorner",barCont).CornerRadius=UDim.new(1,0)
+local barFill=Instance.new("Frame",barCont); barFill.Size=UDim2.new(0,0,1,0); barFill.BackgroundColor3=C.red; barFill.BorderSizePixel=0
+Instance.new("UICorner",barFill).CornerRadius=UDim.new(1,0)
+ 
+local loadStat=Instance.new("TextLabel",LoadF); loadStat.Size=UDim2.new(0,360,0,18); loadStat.Position=UDim2.new(0.5,-180,0.5,84); loadStat.BackgroundTransparency=1; loadStat.TextColor3=C.dim; loadStat.Font=F; loadStat.TextSize=11; loadStat.TextXAlignment=Enum.TextXAlignment.Center; loadStat.Text="Inicializando..."
+ 
+local LOAD_TIME=5
+local loadSteps={{0.15,"Verificando ambiente..."},{0.30,"Carregando módulos..."},{0.50,"Inicializando ESP..."},{0.65,"Configurando Aimbot..."},{0.80,"Aplicando configurações salvas..."},{0.95,"Finalizando..."},{1.00,"Pronto!"}}
+ 
+task.spawn(function()
+    local st=tick()
+    while true do
+        local prog=math.min((tick()-st)/LOAD_TIME,1)
+        barFill.Size=UDim2.new(prog,0,1,0)
+        for i=#loadSteps,1,-1 do if prog>=loadSteps[i][1]-0.01 then loadStat.Text=loadSteps[i][2]; break end end
+        if prog>=1 then break end
+        task.wait(0.05)
+    end
+end)
+ 
+task.wait(LOAD_TIME+0.3)
+TweenService:Create(LoadF,TweenInfo.new(0.5,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency=1}):Play()
+for _,desc in ipairs(LoadF:GetDescendants()) do
+    if desc:IsA("TextLabel") then TweenService:Create(desc,TweenInfo.new(0.4),{TextTransparency=1}):Play()
+    elseif desc:IsA("Frame") then TweenService:Create(desc,TweenInfo.new(0.4),{BackgroundTransparency=1}):Play() end
+end
+task.wait(0.55); LoadF:Destroy()
+ 
+LoadConfig()
+ 
+-- ============================================================
+-- JANELA PRINCIPAL
+-- ============================================================
+ 
+local Win=Instance.new("Frame",SG)
+Win.Name="Win"; Win.Size=UDim2.new(0,880,0,500); Win.Position=UDim2.new(0.5,-440,0.5,-250)
+Win.BackgroundColor3=C.bg0; Win.BorderSizePixel=0; Win.Active=true; Win.Draggable=true
+Instance.new("UICorner",Win).CornerRadius=UDim.new(0,4)
+Instance.new("UIStroke",Win).Color=C.red
+_G._223HUB_Win=Win
+ 
+local TB=Instance.new("Frame",Win); TB.Size=UDim2.new(1,0,0,36); TB.BackgroundColor3=C.bg1; TB.BorderSizePixel=0
+Instance.new("UICorner",TB).CornerRadius=UDim.new(0,4)
+local tbFx=Instance.new("Frame",TB); tbFx.Size=UDim2.new(1,0,0,4); tbFx.Position=UDim2.new(0,0,1,-4); tbFx.BackgroundColor3=C.bg1; tbFx.BorderSizePixel=0
+ 
+local LF2=Instance.new("Frame",TB); LF2.Size=UDim2.new(0,165,1,0); LF2.BackgroundTransparency=1
+local ic2=Instance.new("TextLabel",LF2); ic2.Text="◈"; ic2.Size=UDim2.new(0,28,1,0); ic2.Position=UDim2.new(0,8,0,0); ic2.BackgroundTransparency=1; ic2.TextColor3=C.red; ic2.Font=FB; ic2.TextSize=18
+local ln2=Instance.new("TextLabel",LF2); ln2.Text="223HUB"; ln2.Size=UDim2.new(1,-36,0,20); ln2.Position=UDim2.new(0,34,0,4); ln2.BackgroundTransparency=1; ln2.TextColor3=C.wht; ln2.Font=FB; ln2.TextSize=14; ln2.TextXAlignment=Enum.TextXAlignment.Left
+local lb2=Instance.new("TextLabel",LF2); lb2.Text="(Public Beta)"; lb2.Size=UDim2.new(1,-36,0,12); lb2.Position=UDim2.new(0,34,0,20); lb2.BackgroundTransparency=1; lb2.TextColor3=C.dim; lb2.Font=F; lb2.TextSize=10; lb2.TextXAlignment=Enum.TextXAlignment.Left
+local lsep2=Instance.new("Frame",TB); lsep2.Size=UDim2.new(0,1,0.55,0); lsep2.Position=UDim2.new(0,163,0.22,0); lsep2.BackgroundColor3=C.sep; lsep2.BorderSizePixel=0
+ 
+local TabsArea=Instance.new("Frame",TB); TabsArea.Size=UDim2.new(1,-175,1,0); TabsArea.Position=UDim2.new(0,169,0,0); TabsArea.BackgroundTransparency=1
+local TLL=Instance.new("UIListLayout",TabsArea); TLL.FillDirection=Enum.FillDirection.Horizontal; TLL.VerticalAlignment=Enum.VerticalAlignment.Center; TLL.Padding=UDim.new(0,2)
+Instance.new("Frame",Win).Size=UDim2.new(1,0,0,1); local td=Win:FindFirstChildOfClass("Frame")
+ 
+local ContentF=Instance.new("Frame",Win); ContentF.Size=UDim2.new(1,-16,1,-50); ContentF.Position=UDim2.new(0,8,0,46); ContentF.BackgroundTransparency=1; ContentF.BorderSizePixel=0
+ 
+-- ============================================================
+-- COMPONENT FUNCTIONS
+-- ============================================================
+ 
+local function Panel(parent,title,xOff,yOff,w,h)
+    local f=Instance.new("Frame",parent); f.Position=UDim2.new(0,xOff,0,yOff); f.Size=UDim2.new(0,w,0,h); f.BackgroundColor3=C.bg2; f.BorderSizePixel=0
+    Instance.new("UICorner",f).CornerRadius=UDim.new(0,3); Instance.new("UIStroke",f).Color=C.sep
+    local ph=Instance.new("Frame",f); ph.Size=UDim2.new(1,0,0,26); ph.BackgroundColor3=C.bg1; ph.BorderSizePixel=0
+    Instance.new("UICorner",ph).CornerRadius=UDim.new(0,3)
+    local phx=Instance.new("Frame",ph); phx.Size=UDim2.new(1,0,0,3); phx.Position=UDim2.new(0,0,1,-3); phx.BackgroundColor3=C.bg1; phx.BorderSizePixel=0
+    local pl=Instance.new("TextLabel",ph); pl.Text=title; pl.Size=UDim2.new(1,-12,1,0); pl.Position=UDim2.new(0,10,0,0); pl.BackgroundTransparency=1; pl.TextColor3=C.text; pl.Font=FB; pl.TextSize=12; pl.TextXAlignment=Enum.TextXAlignment.Left
+    local body=Instance.new("ScrollingFrame",f); body.Size=UDim2.new(1,-14,1,-34); body.Position=UDim2.new(0,7,0,30); body.BackgroundTransparency=1; body.BorderSizePixel=0; body.ScrollBarThickness=2; body.ScrollBarImageColor3=C.red; body.CanvasSize=UDim2.new(0,0,0,0); body.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    Instance.new("UIListLayout",body).Padding=UDim.new(0,3)
+    return body
+end
+ 
+local function Row(parent,text,order,getV,setV,rKey)
+    local f=Instance.new("Frame",parent); f.Size=UDim2.new(1,0,0,22); f.BackgroundTransparency=1; f.LayoutOrder=order
+    local chk=Instance.new("Frame",f); chk.Size=UDim2.new(0,14,0,14); chk.Position=UDim2.new(0,0,0.5,-7); chk.BackgroundColor3=C.bg3; chk.BorderSizePixel=0
+    Instance.new("UICorner",chk).CornerRadius=UDim.new(0,2)
+    local cS=Instance.new("UIStroke",chk); cS.Color=C.dim; cS.Thickness=1
+    local ck=Instance.new("TextLabel",chk); ck.Text="✓"; ck.Size=UDim2.new(1,0,1,0); ck.BackgroundTransparency=1; ck.TextColor3=C.pink; ck.Font=FB; ck.TextSize=11; ck.Visible=getV()
+    local lbl=Instance.new("TextLabel",f); lbl.Text=text; lbl.Size=UDim2.new(1,-20,1,0); lbl.Position=UDim2.new(0,20,0,0); lbl.BackgroundTransparency=1; lbl.TextColor3=C.text; lbl.Font=F; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
+    local btn=Instance.new("TextButton",f); btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1; btn.Text=""
+    local function ref()
+        local v=getV(); ck.Visible=v
+        chk.BackgroundColor3=v and Color3.fromRGB(38,8,8) or C.bg3
+        cS.Color=v and C.red or C.dim
+    end
+    if rKey then RefreshCBs[rKey]=ref end
+    btn.MouseButton1Click:Connect(function() setV(not getV()); ref() end)
+    ref()
+end
+ 
+local AS2=nil
+UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then AS2=nil end end)
+UserInputService.InputChanged:Connect(function(i)
+    if AS2 and i.UserInputType==Enum.UserInputType.MouseMovement then
+        local s=AS2; local r=math.clamp((i.Position.X-s.bar.AbsolutePosition.X)/s.bar.AbsoluteSize.X,0,1)
+        local v=math.floor(s.mn+r*(s.mx-s.mn)); s.fill.Size=UDim2.new(r,0,1,0); s.vl.Text=v.." / "..s.mx; s.cb(v)
+    end
+end)
+ 
+local function Slider(parent,label,mn,mx,def,order,cb)
+    local cur=def
+    local hdr=Instance.new("Frame",parent); hdr.Size=UDim2.new(1,0,0,18); hdr.BackgroundTransparency=1; hdr.LayoutOrder=order
+    local hl=Instance.new("TextLabel",hdr); hl.Text=label; hl.Size=UDim2.new(1,-38,1,0); hl.BackgroundTransparency=1; hl.TextColor3=C.text; hl.Font=F; hl.TextSize=12; hl.TextXAlignment=Enum.TextXAlignment.Left
+    local bm=Instance.new("TextButton",hdr); bm.Text="-"; bm.Size=UDim2.new(0,14,0,14); bm.Position=UDim2.new(1,-30,0.5,-7); bm.BackgroundTransparency=1; bm.TextColor3=C.dim; bm.Font=FB; bm.TextSize=14; bm.BorderSizePixel=0
+    local bp=Instance.new("TextButton",hdr); bp.Text="+"; bp.Size=UDim2.new(0,14,0,14); bp.Position=UDim2.new(1,-14,0.5,-7); bp.BackgroundTransparency=1; bp.TextColor3=C.dim; bp.Font=FB; bp.TextSize=14; bp.BorderSizePixel=0
+    local br=Instance.new("Frame",parent); br.Size=UDim2.new(1,0,0,20); br.BackgroundTransparency=1; br.LayoutOrder=order+1
+    local bar=Instance.new("Frame",br); bar.Size=UDim2.new(1,0,0,20); bar.BackgroundColor3=C.bg3; bar.BorderSizePixel=0
+    Instance.new("UICorner",bar).CornerRadius=UDim.new(0,2)
+    local r0=math.clamp((def-mn)/(mx-mn),0,1)
+    local fill=Instance.new("Frame",bar); fill.Size=UDim2.new(r0,0,1,0); fill.BackgroundColor3=C.pink; fill.BorderSizePixel=0
+    Instance.new("UICorner",fill).CornerRadius=UDim.new(0,2)
+    local vl=Instance.new("TextLabel",bar); vl.Text=def.." / "..mx; vl.Size=UDim2.new(1,0,1,0); vl.BackgroundTransparency=1; vl.TextColor3=C.text; vl.Font=F; vl.TextSize=11; vl.TextXAlignment=Enum.TextXAlignment.Center
+    local sd={bar=bar,fill=fill,vl=vl,mn=mn,mx=mx,cb=function(v) cur=v; cb(v) end}
+    local cb2=Instance.new("TextButton",bar); cb2.Size=UDim2.new(1,0,1,0); cb2.BackgroundTransparency=1; cb2.Text=""
+    cb2.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then AS2=sd end end)
+    bm.MouseButton1Click:Connect(function() cur=math.max(mn,cur-1); fill.Size=UDim2.new((cur-mn)/(mx-mn),0,1,0); vl.Text=cur.." / "..mx; cb(cur) end)
+    bp.MouseButton1Click:Connect(function() cur=math.min(mx,cur+1); fill.Size=UDim2.new((cur-mn)/(mx-mn),0,1,0); vl.Text=cur.." / "..mx; cb(cur) end)
+end
+ 
+local function Selector(parent,lbl,options,def,order,cb)
+    local idx=1; for i,v in ipairs(options) do if v==def then idx=i end end
+    local lf=Instance.new("Frame",parent); lf.Size=UDim2.new(1,0,0,14); lf.BackgroundTransparency=1; lf.LayoutOrder=order
+    local ll=Instance.new("TextLabel",lf); ll.Text=lbl; ll.Size=UDim2.new(1,0,1,0); ll.BackgroundTransparency=1; ll.TextColor3=C.dim; ll.Font=F; ll.TextSize=10; ll.TextXAlignment=Enum.TextXAlignment.Left
+    local rf=Instance.new("Frame",parent); rf.Size=UDim2.new(1,0,0,22); rf.BackgroundTransparency=1; rf.LayoutOrder=order+1
+    local box=Instance.new("Frame",rf); box.Size=UDim2.new(1,0,1,0); box.BackgroundColor3=C.bg3; box.BorderSizePixel=0
+    Instance.new("UICorner",box).CornerRadius=UDim.new(0,2); Instance.new("UIStroke",box).Color=C.sep
+    local vl=Instance.new("TextLabel",box); vl.Text=options[idx]; vl.Size=UDim2.new(1,-28,1,0); vl.Position=UDim2.new(0,8,0,0); vl.BackgroundTransparency=1; vl.TextColor3=C.text; vl.Font=F; vl.TextSize=12; vl.TextXAlignment=Enum.TextXAlignment.Left
+    local pl=Instance.new("TextButton",box); pl.Text="+"; pl.Size=UDim2.new(0,22,1,0); pl.Position=UDim2.new(1,-22,0,0); pl.BackgroundColor3=C.bg1; pl.TextColor3=C.text; pl.Font=FB; pl.TextSize=13; pl.BorderSizePixel=0
+    Instance.new("UICorner",pl).CornerRadius=UDim.new(0,2)
+    pl.MouseButton1Click:Connect(function() idx=idx%#options+1; vl.Text=options[idx]; cb(options[idx]) end)
+end
+ 
+local function KeyBind(parent,label,order,getN,onSet)
+    local f=Instance.new("Frame",parent); f.Size=UDim2.new(1,0,0,22); f.BackgroundTransparency=1; f.LayoutOrder=order
+    local lbl=Instance.new("TextLabel",f); lbl.Text=label; lbl.Size=UDim2.new(1,-76,1,0); lbl.BackgroundTransparency=1; lbl.TextColor3=C.text; lbl.Font=F; lbl.TextSize=12; lbl.TextXAlignment=Enum.TextXAlignment.Left
+    local badge=Instance.new("TextButton",f); badge.Size=UDim2.new(0,68,0,18); badge.Position=UDim2.new(1,-68,0.5,-9)
+    badge.BackgroundColor3=C.bg3; badge.TextColor3=C.text; badge.Font=FB; badge.TextSize=11; badge.BorderSizePixel=0; badge.Text="["..getN().."]"
+    Instance.new("UICorner",badge).CornerRadius=UDim.new(0,2); Instance.new("UIStroke",badge).Color=C.sep
+    local listening=false
+    badge.MouseButton1Click:Connect(function()
+        if listening then return end; listening=true; badge.Text="[...]"; badge.TextColor3=C.pink
+        local conn; conn=UserInputService.InputBegan:Connect(function(input,gp)
+            if gp then return end
+            if input.UserInputType==Enum.UserInputType.Keyboard then
+                conn:Disconnect(); listening=false
+                local name=input.KeyCode.Name; badge.Text="["..name.."]"; badge.TextColor3=C.text
+                onSet(input.KeyCode,name)
+            end
+        end)
+    end)
+end
+ 
+local function ActionBtn(parent,text,order,onClick,bgColor)
+    local btn=Instance.new("TextButton",parent); btn.Text=text; btn.Size=UDim2.new(1,0,0,24)
+    local bg=bgColor or Color3.fromRGB(32,8,8)
+    btn.BackgroundColor3=bg; btn.TextColor3=bgColor and C.wht or C.redH
+    btn.Font=F; btn.TextSize=12; btn.BorderSizePixel=0; btn.LayoutOrder=order
+    Instance.new("UICorner",btn).CornerRadius=UDim.new(0,2)
+    btn.MouseEnter:Connect(function() btn.BackgroundColor3=Color3.fromRGB(bg.R*255+18,bg.G*255+4,bg.B*255+4) end)
+    btn.MouseLeave:Connect(function() btn.BackgroundColor3=bg end)
+    btn.MouseButton1Click:Connect(onClick)
+    return btn
+end
+ 
+-- Player list widget (TrackList ESP / Aim Blacklist)
+local function PlayerListWidget(parent,startOrder,sectionTitle,dataTable)
+    local sep=Instance.new("Frame",parent); sep.Size=UDim2.new(1,0,0,1); sep.BackgroundColor3=C.sep; sep.BorderSizePixel=0; sep.LayoutOrder=startOrder
+    local tF=Instance.new("Frame",parent); tF.Size=UDim2.new(1,0,0,16); tF.BackgroundTransparency=1; tF.LayoutOrder=startOrder+1
+    local tL=Instance.new("TextLabel",tF); tL.Text=sectionTitle; tL.Size=UDim2.new(1,0,1,0); tL.BackgroundTransparency=1; tL.TextColor3=C.dim; tL.Font=FB; tL.TextSize=10; tL.TextXAlignment=Enum.TextXAlignment.Left
+    local addRow=Instance.new("Frame",parent); addRow.Size=UDim2.new(1,0,0,24); addRow.BackgroundTransparency=1; addRow.LayoutOrder=startOrder+2
+    local addBox=Instance.new("TextBox",addRow); addBox.PlaceholderText="Username..."; addBox.Text=""
+    addBox.Size=UDim2.new(1,-52,1,0); addBox.BackgroundColor3=C.bg3; addBox.TextColor3=C.text; addBox.PlaceholderColor3=C.dim; addBox.Font=F; addBox.TextSize=12; addBox.BorderSizePixel=0; addBox.ClearTextOnFocus=false
+    Instance.new("UICorner",addBox).CornerRadius=UDim.new(0,2); Instance.new("UIStroke",addBox).Color=C.sep; Instance.new("UIPadding",addBox).PaddingLeft=UDim.new(0,5)
+    local addBtn=Instance.new("TextButton",addRow); addBtn.Text="+ Add"; addBtn.Size=UDim2.new(0,46,1,0); addBtn.Position=UDim2.new(1,-46,0,0)
+    addBtn.BackgroundColor3=C.red; addBtn.TextColor3=C.wht; addBtn.Font=FB; addBtn.TextSize=11; addBtn.BorderSizePixel=0
+    Instance.new("UICorner",addBtn).CornerRadius=UDim.new(0,2)
+    local listH=Instance.new("Frame",parent); listH.Size=UDim2.new(1,0,0,85); listH.BackgroundColor3=C.bg3; listH.BorderSizePixel=0; listH.LayoutOrder=startOrder+3
+    Instance.new("UICorner",listH).CornerRadius=UDim.new(0,2)
+    local listS=Instance.new("ScrollingFrame",listH); listS.Size=UDim2.new(1,-8,1,-8); listS.Position=UDim2.new(0,4,0,4); listS.BackgroundTransparency=1; listS.BorderSizePixel=0; listS.ScrollBarThickness=2; listS.ScrollBarImageColor3=C.red; listS.CanvasSize=UDim2.new(0,0,0,0); listS.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    Instance.new("UIListLayout",listS).Padding=UDim.new(0,2)
+    local stF=Instance.new("Frame",parent); stF.Size=UDim2.new(1,0,0,14); stF.BackgroundTransparency=1; stF.LayoutOrder=startOrder+4
+    local stL=Instance.new("TextLabel",stF); stL.Size=UDim2.new(1,0,1,0); stL.BackgroundTransparency=1; stL.TextColor3=C.dim; stL.Font=F; stL.TextSize=10; stL.TextXAlignment=Enum.TextXAlignment.Left
+ 
+    local function UpdateStatus()
+        local count=0; for _ in pairs(dataTable) do count=count+1 end
+        stL.Text=count==0 and "Vazio (todos incluídos)" or count.." jogador(es) na lista"
+    end
+ 
+    local function Rebuild()
+        for _,c in ipairs(listS:GetChildren()) do if not c:IsA("UIListLayout") then c:Destroy() end end
+        local any=false
+        for name in pairs(dataTable) do
+            any=true
+            local row=Instance.new("Frame",listS); row.Size=UDim2.new(1,0,0,18); row.BackgroundTransparency=1
+            local nL=Instance.new("TextLabel",row); nL.Text="· "..name; nL.Size=UDim2.new(1,-28,1,0); nL.BackgroundTransparency=1; nL.TextColor3=C.text; nL.Font=F; nL.TextSize=11; nL.TextXAlignment=Enum.TextXAlignment.Left
+            local rmB=Instance.new("TextButton",row); rmB.Text="✕"; rmB.Size=UDim2.new(0,22,0,16); rmB.Position=UDim2.new(1,-22,0.5,-8)
+            rmB.BackgroundColor3=Color3.fromRGB(50,10,10); rmB.TextColor3=C.redH; rmB.Font=FB; rmB.TextSize=11; rmB.BorderSizePixel=0
+            Instance.new("UICorner",rmB).CornerRadius=UDim.new(0,2)
+            local capName=name
+            rmB.MouseButton1Click:Connect(function() dataTable[capName]=nil; row:Destroy(); UpdateStatus() end)
+        end
+        if not any then
+            local el=Instance.new("TextLabel",listS); el.Text="(vazio)"; el.Size=UDim2.new(1,0,0,16); el.BackgroundTransparency=1; el.TextColor3=C.dim; el.Font=F; el.TextSize=10; el.TextXAlignment=Enum.TextXAlignment.Left
+        end
+        UpdateStatus()
+    end
+ 
+    addBtn.MouseButton1Click:Connect(function()
+        local q=addBox.Text:gsub("%s+",""); if q=="" then return end
+        local found=q
+        for _,p in ipairs(Players:GetPlayers()) do if p.Name:lower()==q:lower() or p.DisplayName:lower()==q:lower() then found=p.Name; break end end
+        dataTable[found]=true; addBox.Text=""; Rebuild()
+    end)
+ 
+    Rebuild()
+    return Rebuild
+end
+ 
+-- ============================================================
+-- TAB SYSTEM
+-- ============================================================
+ 
+local Pages={}; local CurTab=nil
+local function MakeTab(name,order)
+    local btn=Instance.new("TextButton",TabsArea); btn.Text=name:upper(); btn.Size=UDim2.new(0,88,0,36); btn.BackgroundTransparency=1; btn.TextColor3=C.dim; btn.Font=FB; btn.TextSize=12; btn.BorderSizePixel=0; btn.LayoutOrder=order
+    local ul=Instance.new("Frame",btn); ul.Size=UDim2.new(0.65,0,0,2); ul.Position=UDim2.new(0.175,0,1,-2); ul.BackgroundColor3=C.redH; ul.BorderSizePixel=0; ul.Visible=false
+    local page=Instance.new("Frame",ContentF); page.Size=UDim2.new(1,0,1,0); page.BackgroundTransparency=1; page.Visible=false
+    Pages[name]={btn=btn,ul=ul,page=page}
+    btn.MouseButton1Click:Connect(function()
+        if CurTab then Pages[CurTab].btn.TextColor3=C.dim; Pages[CurTab].ul.Visible=false; Pages[CurTab].page.Visible=false end
+        CurTab=name; btn.TextColor3=C.wht; ul.Visible=true; page.Visible=true
+    end)
+    return page
+end
+ 
+local MainPage    =MakeTab("Main",    1)
+local VisuaisPage =MakeTab("Visuals", 2)
+local MiscPage    =MakeTab("Misc",    3)
+local SettingsPage=MakeTab("Settings",4)
+Pages["Main"].btn.TextColor3=C.wht; Pages["Main"].ul.Visible=true; Pages["Main"].page.Visible=true; CurTab="Main"
+ 
+-- ============================================================
+-- PAGE: MAIN
+-- ============================================================
+ 
+local ABd=Panel(MainPage,"Aimbot",      0,  0,420,450)
+local FBd=Panel(MainPage,"FOV Settings",428,0,420,215)
+local TBd=Panel(MainPage,"TriggerBot",  428,223,420,170)
+ 
+Row(ABd,"Aimbot",         0,function() return Cfg.Aim.Aimbot end,    function(v) Cfg.Aim.Aimbot=v end,   "Aimbot")
+Row(ABd,"Wall Check",     1,function() return Cfg.Aim.WallCheck end, function(v) Cfg.Aim.WallCheck=v end)
+Row(ABd,"Prediction",     2,function() return Cfg.Aim.Prediction end,function(v) Cfg.Aim.Prediction=v end)
+Slider(ABd,"Prediction Strength",1,5,1,3,function(v) Cfg.Aim.PredStrength=v end)
+Selector(ABd,"Target Part",{"Head","HumanoidRootPart","Torso"},"Head",6,function(v) Cfg.Aim.AimPart=v end)
+Selector(ABd,"Lock Mode",{"First Person","Third Person","Mouse"},"First Person",8,function(v) Cfg.Aim.LockMode=v end)
+Slider(ABd,"Smoothness",1,100,20,10,function(v) Cfg.Aim.Smoothness=v end)
+Row(ABd,"Silent Aim",14,function() return Cfg.Aim.SilentAim end,function(v) Cfg.Aim.SilentAim=v; if v then HookSilentAim() end end,"SilentAim")
+KeyBind(ABd,"Aim Key",16,function() return Cfg.Aim.AimKeyName end,function(k,n) Cfg.Aim.AimKey=k; Cfg.Aim.AimKeyName=n end)
+PlayerListWidget(ABd,18,"LISTA DE EXCLUSÃO (MIRA)",Cfg.Aim.Blacklist)
+ 
+Row(FBd,"Use FOV", 0,function() return Cfg.Aim.UseFOV  end,function(v) Cfg.Aim.UseFOV=v end)
+Row(FBd,"Show FOV",1,function() return Cfg.Aim.ShowFOV end,function(v) Cfg.Aim.ShowFOV=v end)
+Slider(FBd,"FOV Size",20,500,90,2,function(v) Cfg.Aim.FOV=v; FOVC.Radius=v end)
+do
+    local fr=Instance.new("Frame",FBd); fr.Size=UDim2.new(1,0,0,22); fr.BackgroundTransparency=1; fr.LayoutOrder=5
+    local fl=Instance.new("TextLabel",fr); fl.Text="FOV Color"; fl.Size=UDim2.new(1,-32,1,0); fl.BackgroundTransparency=1; fl.TextColor3=C.text; fl.Font=F; fl.TextSize=12; fl.TextXAlignment=Enum.TextXAlignment.Left
+    local fs=Instance.new("Frame",fr); fs.Size=UDim2.new(0,24,0,16); fs.Position=UDim2.new(1,-24,0.5,-8); fs.BackgroundColor3=C.wht; fs.BorderSizePixel=0
+    Instance.new("UICorner",fs).CornerRadius=UDim.new(0,2); Instance.new("UIStroke",fs).Color=C.sep
+end
+ 
+Row(TBd,"TriggerBot",0,function() return Cfg.TriggerBot.Enabled   end,function(v) Cfg.TriggerBot.Enabled=v end)
+Row(TBd,"Team Check",1,function() return Cfg.TriggerBot.TeamCheck end,function(v) Cfg.TriggerBot.TeamCheck=v end)
+Slider(TBd,"Delay (ms)",0,1000,0,2,function(v) Cfg.TriggerBot.Delay=v end)
+ 
+-- ============================================================
+-- PAGE: VISUALS
+-- ============================================================
+ 
+local EBd=Panel(VisuaisPage,"ESP",        0,  0,420,450)
+local TPd=Panel(VisuaisPage,"Track Player",428,0,420,450)
+ 
+do
+    local enR=Instance.new("Frame",EBd); enR.Size=UDim2.new(1,0,0,22); enR.BackgroundTransparency=1; enR.LayoutOrder=0
+    local ec=Instance.new("Frame",enR); ec.Size=UDim2.new(0,14,0,14); ec.Position=UDim2.new(0,0,0.5,-7); ec.BackgroundColor3=C.bg3; ec.BorderSizePixel=0
+    Instance.new("UICorner",ec).CornerRadius=UDim.new(0,2)
+    local eCS=Instance.new("UIStroke",ec); eCS.Color=C.dim; eCS.Thickness=1
+    local eTk=Instance.new("TextLabel",ec); eTk.Text="✓"; eTk.Size=UDim2.new(1,0,1,0); eTk.BackgroundTransparency=1; eTk.TextColor3=C.pink; eTk.Font=FB; eTk.TextSize=11; eTk.Visible=Cfg.ESP.Enabled
+    local eL=Instance.new("TextLabel",enR); eL.Text="ESP Enabled"; eL.Size=UDim2.new(1,-46,1,0); eL.Position=UDim2.new(0,20,0,0); eL.BackgroundTransparency=1; eL.TextColor3=C.text; eL.Font=FB; eL.TextSize=12; eL.TextXAlignment=Enum.TextXAlignment.Left
+    local eBg=Instance.new("TextLabel",enR); eBg.Text="ESP"; eBg.Size=UDim2.new(0,28,0,16); eBg.Position=UDim2.new(1,-28,0.5,-8); eBg.BackgroundColor3=C.red; eBg.TextColor3=C.wht; eBg.Font=FB; eBg.TextSize=9; eBg.BorderSizePixel=0
+    Instance.new("UICorner",eBg).CornerRadius=UDim.new(0,2)
+    local eBtn=Instance.new("TextButton",enR); eBtn.Size=UDim2.new(1,0,1,0); eBtn.BackgroundTransparency=1; eBtn.Text=""
+    local function refESP()
+        eTk.Visible=Cfg.ESP.Enabled; ec.BackgroundColor3=Cfg.ESP.Enabled and Color3.fromRGB(38,8,8) or C.bg3; eCS.Color=Cfg.ESP.Enabled and C.red or C.dim
+    end
+    RefreshCBs["ESPEnabled"]=refESP
+    eBtn.MouseButton1Click:Connect(function() Cfg.ESP.Enabled=not Cfg.ESP.Enabled; refESP() end)
+end
+ 
+Row(EBd,"Box ESP",    1,function() return Cfg.ESP.BoxESP   end,function(v) Cfg.ESP.BoxESP=v end)
+Row(EBd,"Fill Box",   2,function() return Cfg.ESP.FillBox  end,function(v) Cfg.ESP.FillBox=v end)
+Row(EBd,"Name ESP",   3,function() return Cfg.ESP.NameESP  end,function(v) Cfg.ESP.NameESP=v end)
+Row(EBd,"Health Bar", 4,function() return Cfg.ESP.HealthBar end,function(v) Cfg.ESP.HealthBar=v end)
+Row(EBd,"Tracers",    5,function() return Cfg.ESP.Tracers  end,function(v) Cfg.ESP.Tracers=v end)
+Row(EBd,"Distance",   6,function() return Cfg.ESP.Distance end,function(v) Cfg.ESP.Distance=v end)
+Row(EBd,"Wall Check", 7,function() return Cfg.ESP.WallCheck end,function(v) Cfg.ESP.WallCheck=v end)
+Slider(EBd,"Max Distance",50,1000,500,8,function(v) Cfg.ESP.MaxDistance=v end)
+ 
+-- Track Player panel
+do
+    local infoF=Instance.new("Frame",TPd); infoF.Size=UDim2.new(1,0,0,26); infoF.BackgroundTransparency=1; infoF.LayoutOrder=0
+    local iL=Instance.new("TextLabel",infoF); iL.Text="Lista vazia = ESP em TODOS.\nAdicione nomes para filtrar somente eles."; iL.Size=UDim2.new(1,0,1,0); iL.BackgroundTransparency=1; iL.TextColor3=C.dim; iL.Font=F; iL.TextSize=10; iL.TextXAlignment=Enum.TextXAlignment.Left; iL.TextWrapped=true
+    local rebuildESP=PlayerListWidget(TPd,1,"JOGADORES RASTREADOS",Cfg.ESP.TrackList)
+ 
+    -- Lista online com toggle rápido
+    local sep2=Instance.new("Frame",TPd); sep2.Size=UDim2.new(1,0,0,1); sep2.BackgroundColor3=C.sep; sep2.BorderSizePixel=0; sep2.LayoutOrder=7
+    local onlH=Instance.new("Frame",TPd); onlH.Size=UDim2.new(1,0,0,16); onlH.BackgroundTransparency=1; onlH.LayoutOrder=8
+    local onlL=Instance.new("TextLabel",onlH); onlL.Text="JOGADORES NO SERVIDOR (clique Track/Untrack)"; onlL.Size=UDim2.new(1,0,1,0); onlL.BackgroundTransparency=1; onlL.TextColor3=C.dim; onlL.Font=FB; onlL.TextSize=10; onlL.TextXAlignment=Enum.TextXAlignment.Left
+    local onlS=Instance.new("ScrollingFrame",TPd); onlS.Size=UDim2.new(1,0,0,130); onlS.BackgroundColor3=C.bg3; onlS.BorderSizePixel=0; onlS.LayoutOrder=9
+    Instance.new("UICorner",onlS).CornerRadius=UDim.new(0,2); onlS.ScrollBarThickness=2; onlS.ScrollBarImageColor3=C.red; onlS.CanvasSize=UDim2.new(0,0,0,0); onlS.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    Instance.new("UIListLayout",onlS).Padding=UDim.new(0,2)
+    local onlPad=Instance.new("UIPadding",onlS); onlPad.PaddingLeft=UDim.new(0,4); onlPad.PaddingTop=UDim.new(0,4); onlPad.PaddingRight=UDim.new(0,4)
+ 
+    local function RefreshOnline()
+        for _,c in ipairs(onlS:GetChildren()) do if not c:IsA("UIListLayout") and not c:IsA("UIPadding") then c:Destroy() end end
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p==LocalPlayer then continue end
+            local row=Instance.new("Frame",onlS); row.Size=UDim2.new(1,0,0,22); row.BackgroundTransparency=1
+            local pN=Instance.new("TextLabel",row); pN.Text=p.Name.." ("..p.DisplayName..")"; pN.Size=UDim2.new(1,-52,1,0); pN.BackgroundTransparency=1; pN.TextColor3=C.text; pN.Font=F; pN.TextSize=11; pN.TextXAlignment=Enum.TextXAlignment.Left
+            local tBtn=Instance.new("TextButton",row); tBtn.Size=UDim2.new(0,46,0,16); tBtn.Position=UDim2.new(1,-46,0.5,-8)
+            tBtn.BackgroundColor3=Cfg.ESP.TrackList[p.Name] and C.red or C.bg3
+            tBtn.Text=Cfg.ESP.TrackList[p.Name] and "Untrack" or "Track"
+            tBtn.TextColor3=C.wht; tBtn.Font=FB; tBtn.TextSize=9; tBtn.BorderSizePixel=0
+            Instance.new("UICorner",tBtn).CornerRadius=UDim.new(0,2)
+            local capP=p
+            tBtn.MouseButton1Click:Connect(function()
+                if Cfg.ESP.TrackList[capP.Name] then
+                    Cfg.ESP.TrackList[capP.Name]=nil; tBtn.BackgroundColor3=C.bg3; tBtn.Text="Track"
+                else
+                    Cfg.ESP.TrackList[capP.Name]=true; tBtn.BackgroundColor3=C.red; tBtn.Text="Untrack"
+                end
+                rebuildESP()
+            end)
+        end
+    end
+ 
+    ActionBtn(TPd,"↺ Atualizar Lista Online",10,RefreshOnline)
+    RefreshOnline()
+end
+ 
+-- ============================================================
+-- PAGE: MISC
+-- ============================================================
+ 
+local MovBd =Panel(MiscPage,"Movimento",  0,  0,420,305)
+local UtilBd=Panel(MiscPage,"Utilidades",428,0,420,450)
+ 
+Row(MovBd,"Fly",         0,function() return Cfg.Misc.Fly end,          function(v) Cfg.Misc.Fly=v; if v then EnableFly() else DisableFly() end end,"Fly")
+Slider(MovBd,"Fly Speed",1,200,50,1,function(v) Cfg.Misc.FlySpeed=v end)
+Row(MovBd,"Noclip",      4,function() return Cfg.Misc.Noclip end,       function(v) Cfg.Misc.Noclip=v; if v then EnableNoclip() else DisableNoclip() end end,"Noclip")
+Row(MovBd,"Speed Hack",  6,function() return Cfg.Misc.Speed end,        function(v) Cfg.Misc.Speed=v; ApplySpeed() end,"Speed")
+Slider(MovBd,"Walk Speed",1,500,16,7,function(v) Cfg.Misc.WalkSpeed=v; if Cfg.Misc.Speed then ApplySpeed() end end)
+Row(MovBd,"Jump Modifier",10,function() return Cfg.Misc.JumpModifier end,function(v) Cfg.Misc.JumpModifier=v; ApplyJump() end)
+Slider(MovBd,"Jump Power",1,500,50,11,function(v) Cfg.Misc.JumpPower=v; if Cfg.Misc.JumpModifier then ApplyJump() end end)
+ 
+Row(UtilBd,"Anti-AFK",    0,function() return Cfg.Misc.AntiAFK end,          function(v) Cfg.Misc.AntiAFK=v end)
+Row(UtilBd,"Hitbox Extender",2,function() return Cfg.Misc.HitboxExtender end,function(v) Cfg.Misc.HitboxExtender=v; RefreshHitboxes() end)
+Slider(UtilBd,"Hitbox Size",1,50,8,3,function(v) Cfg.Misc.HitboxSize=v; if Cfg.Misc.HitboxExtender then RefreshHitboxes() end end)
+ 
+do
+    local s1=Instance.new("Frame",UtilBd); s1.Size=UDim2.new(1,0,0,1); s1.BackgroundColor3=C.sep; s1.BorderSizePixel=0; s1.LayoutOrder=6
+    local t1F=Instance.new("Frame",UtilBd); t1F.Size=UDim2.new(1,0,0,14); t1F.BackgroundTransparency=1; t1F.LayoutOrder=7
+    local t1L=Instance.new("TextLabel",t1F); t1L.Text="TOOL DUPLICATOR"; t1L.Size=UDim2.new(1,0,1,0); t1L.BackgroundTransparency=1; t1L.TextColor3=C.dim; t1L.Font=FB; t1L.TextSize=10; t1L.TextXAlignment=Enum.TextXAlignment.Left
+    local tbxF=Instance.new("Frame",UtilBd); tbxF.Size=UDim2.new(1,0,0,24); tbxF.BackgroundTransparency=1; tbxF.LayoutOrder=8
+    local tb2=Instance.new("TextBox",tbxF); tb2.PlaceholderText="Nome da Tool..."; tb2.Text=""; tb2.Size=UDim2.new(1,0,1,0); tb2.BackgroundColor3=C.bg3; tb2.TextColor3=C.text; tb2.PlaceholderColor3=C.dim; tb2.Font=F; tb2.TextSize=12; tb2.BorderSizePixel=0; tb2.ClearTextOnFocus=false
+    Instance.new("UICorner",tb2).CornerRadius=UDim.new(0,2); Instance.new("UIStroke",tb2).Color=C.sep; Instance.new("UIPadding",tb2).PaddingLeft=UDim.new(0,6)
+    tb2.FocusLost:Connect(function() Cfg.Misc.DupeToolName=tb2.Text end)
+    ActionBtn(UtilBd,"Duplicar Tool",9,function() DuplicateTool() end)
+    local tlH=Instance.new("Frame",UtilBd); tlH.Size=UDim2.new(1,0,0,14); tlH.BackgroundTransparency=1; tlH.LayoutOrder=11
+    local tlL=Instance.new("TextLabel",tlH); tlL.Text="Tools no Backpack:"; tlL.Size=UDim2.new(1,0,1,0); tlL.BackgroundTransparency=1; tlL.TextColor3=C.dim; tlL.Font=F; tlL.TextSize=10; tlL.TextXAlignment=Enum.TextXAlignment.Left
+    local tlS=Instance.new("ScrollingFrame",UtilBd); tlS.Size=UDim2.new(1,0,0,70); tlS.BackgroundColor3=C.bg3; tlS.BorderSizePixel=0; tlS.LayoutOrder=12
+    Instance.new("UICorner",tlS).CornerRadius=UDim.new(0,2); tlS.ScrollBarThickness=2; tlS.ScrollBarImageColor3=C.red; tlS.CanvasSize=UDim2.new(0,0,0,0); tlS.AutomaticCanvasSize=Enum.AutomaticSize.Y
+    local tlPd=Instance.new("UIPadding",tlS); tlPd.PaddingLeft=UDim.new(0,4); tlPd.PaddingTop=UDim.new(0,4); tlPd.PaddingRight=UDim.new(0,4)
+    Instance.new("UIListLayout",tlS).Padding=UDim.new(0,2)
+    local function RTL()
+        for _,c in ipairs(tlS:GetChildren()) do if not c:IsA("UIListLayout") and not c:IsA("UIPadding") then c:Destroy() end end
+        local bp=LocalPlayer:FindFirstChild("Backpack"); local ch=LocalPlayer.Character; local found={}
+        if bp then for _,t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then found[#found+1]=t.Name end end end
+        if ch then for _,t in ipairs(ch:GetChildren()) do if t:IsA("Tool") then found[#found+1]=t.Name.." ★" end end end
+        if #found==0 then found={"(nenhuma tool)"} end
+        for _,name in ipairs(found) do local lf=Instance.new("TextLabel",tlS); lf.Text="· "..name; lf.Size=UDim2.new(1,0,0,14); lf.BackgroundTransparency=1; lf.TextColor3=C.text; lf.Font=F; lf.TextSize=10; lf.TextXAlignment=Enum.TextXAlignment.Left end
+    end
+    ActionBtn(UtilBd,"↺ Atualizar Tools",13,RTL); RTL()
+end
+ 
+-- ============================================================
+-- PAGE: SETTINGS
+-- ============================================================
+ 
+local KBd  =Panel(SettingsPage,"Teclas de Atalho",0,  0,420,450)
+local CfgBd=Panel(SettingsPage,"Configurações",  428,0,420,300)
+ 
+KeyBind(KBd,"Toggle GUI",              0,function() return Cfg.Settings.ToggleKeyName end,          function(k,n) Cfg.Settings.ToggleKey=k; Cfg.Settings.ToggleKeyName=n end)
+KeyBind(KBd,"ESP On/Off",              2,function() return Cfg.Settings.ESPKeyName end,              function(k,n) Cfg.Settings.ESPKey=k; Cfg.Settings.ESPKeyName=n end)
+KeyBind(KBd,"Aimbot On/Off",           4,function() return Cfg.Settings.AimbotToggleKeyName end,     function(k,n) Cfg.Settings.AimbotToggleKey=k; Cfg.Settings.AimbotToggleKeyName=n end)
+KeyBind(KBd,"Silent Aim On/Off",       6,function() return Cfg.Settings.SilentKeyName end,           function(k,n) Cfg.Settings.SilentKey=k; Cfg.Settings.SilentKeyName=n end)
+KeyBind(KBd,"Fly On/Off",              8,function() return Cfg.Settings.FlyKeyName end,              function(k,n) Cfg.Settings.FlyKey=k; Cfg.Settings.FlyKeyName=n end)
+KeyBind(KBd,"Noclip On/Off",          10,function() return Cfg.Settings.NoclipKeyName end,           function(k,n) Cfg.Settings.NoclipKey=k; Cfg.Settings.NoclipKeyName=n end)
+KeyBind(KBd,"Speed Hack On/Off",      12,function() return Cfg.Settings.SpeedKeyName end,            function(k,n) Cfg.Settings.SpeedKey=k; Cfg.Settings.SpeedKeyName=n end)
+KeyBind(KBd,"Aim Key (segurar)",      14,function() return Cfg.Aim.AimKeyName end,                   function(k,n) Cfg.Aim.AimKey=k; Cfg.Aim.AimKeyName=n end)
+ 
+do
+    local sep=Instance.new("Frame",KBd); sep.Size=UDim2.new(1,0,0,1); sep.BackgroundColor3=C.sep; sep.BorderSizePixel=0; sep.LayoutOrder=16
+    local helpF=Instance.new("Frame",KBd); helpF.Size=UDim2.new(1,0,0,28); helpF.BackgroundTransparency=1; helpF.LayoutOrder=17
+    local hL=Instance.new("TextLabel",helpF); hL.Text="Clique no badge [TECLA] e pressione\na tecla desejada para remapear."; hL.Size=UDim2.new(1,0,1,0); hL.BackgroundTransparency=1; hL.TextColor3=C.dim; hL.Font=F; hL.TextSize=10; hL.TextXAlignment=Enum.TextXAlignment.Left; hL.TextWrapped=true
+end
+ 
+do
+    local function SL(parent,text,order)
+        local f=Instance.new("Frame",parent); f.Size=UDim2.new(1,0,0,16); f.BackgroundTransparency=1; f.LayoutOrder=order
+        local l=Instance.new("TextLabel",f); l.Text=text; l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1; l.TextColor3=C.dim; l.Font=FB; l.TextSize=10; l.TextXAlignment=Enum.TextXAlignment.Left
+    end
+    local function IL(parent,text,order)
+        local f=Instance.new("Frame",parent); f.Size=UDim2.new(1,0,0,14); f.BackgroundTransparency=1; f.LayoutOrder=order
+        local l=Instance.new("TextLabel",f); l.Text=text; l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1; l.TextColor3=C.text; l.Font=F; l.TextSize=11; l.TextXAlignment=Enum.TextXAlignment.Left
+    end
+    SL(CfgBd,"SALVAR / CARREGAR",0)
+    local stF=Instance.new("Frame",CfgBd); stF.Size=UDim2.new(1,0,0,18); stF.BackgroundTransparency=1; stF.LayoutOrder=1
+    local stL=Instance.new("TextLabel",stF); stL.Text=""; stL.Size=UDim2.new(1,0,1,0); stL.BackgroundTransparency=1; stL.TextColor3=C.green; stL.Font=F; stL.TextSize=11; stL.TextXAlignment=Enum.TextXAlignment.Left
+    local function ShowSt(msg,color)
+        stL.Text=msg; stL.TextColor3=color or C.green
+        task.delay(3,function() if stL.Text==msg then stL.Text="" end end)
+    end
+    ActionBtn(CfgBd,"💾  Salvar Configurações",2,function()
+        if SaveConfig() then ShowSt("✓ Salvo em "..SAVE_FILE,C.green)
+        else ShowSt("✗ writefile não suportado",C.redH) end
+    end,Color3.fromRGB(15,55,15))
+    ActionBtn(CfgBd,"📂  Carregar Configurações",4,function()
+        if LoadConfig() then ShowSt("✓ Configurações carregadas!",C.green)
+        else ShowSt("✗ Nenhum arquivo encontrado",C.orange) end
+    end,Color3.fromRGB(25,38,8))
+    ActionBtn(CfgBd,"🗑  Resetar para Padrão",6,function()
+        for k,v in pairs({BoxESP=false,FillBox=false,NameESP=false,HealthBar=false,Tracers=false,Distance=false,WallCheck=false,Enabled=false}) do Cfg.ESP[k]=v end
+        Cfg.ESP.MaxDistance=500; Cfg.ESP.TrackList={}
+        for k,v in pairs({Aimbot=false,SilentAim=false,WallCheck=false,Prediction=false,FOV=90,ShowFOV=false,Smoothness=20}) do Cfg.Aim[k]=v end
+        Cfg.Aim.AimKey=Enum.KeyCode.E; Cfg.Aim.AimKeyName="E"; Cfg.Aim.Blacklist={}
+        Cfg.TriggerBot.Enabled=false; Cfg.TriggerBot.Delay=0
+        for k,v in pairs({Fly=false,Noclip=false,Speed=false,AntiAFK=false,HitboxExtender=false,JumpModifier=false}) do Cfg.Misc[k]=v end
+        ShowSt("✓ Resetado para padrão",C.orange)
+    end,Color3.fromRGB(48,12,4))
+    local s2=Instance.new("Frame",CfgBd); s2.Size=UDim2.new(1,0,0,1); s2.BackgroundColor3=C.sep; s2.BorderSizePixel=0; s2.LayoutOrder=8
+    SL(CfgBd,"INFORMAÇÕES",9)
+    IL(CfgBd,"223HUB v5.0  —  Public Beta",10)
+    IL(CfgBd,"HUB BY 𒐬 GROUP",11)
+    IL(CfgBd,"Config: "..SAVE_FILE,12)
+    local s3=Instance.new("Frame",CfgBd); s3.Size=UDim2.new(1,0,0,1); s3.BackgroundColor3=C.sep; s3.BorderSizePixel=0; s3.LayoutOrder=13
+    SL(CfgBd,"INTERFACE",14)
+    IL(CfgBd,"Tecla toggle padrão: [ ; ]",15)
+    IL(CfgBd,"Remapeável acima em Teclas de Atalho",16)
+end
+ 
+-- ============================================================
+print("[223HUB v5.0] ✓ Carregado | Toggle=[;] | Save="..SAVE_FILE)
